@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: nba_pg
+    env_file: .env
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  etl-init:
+    build: ./etl
+    container_name: nba_etl_init
+    env_file: .env
+    command: >
+      /bin/sh -c "
+      python etl_teams_games.py &&
+      python etl_players.py
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  etl-injuries:
+    build: ./etl
+    container_name: nba_etl_injuries
+    env_file: .env
+    command: python run_injuries_loop.py   # toutes les 2h
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dash:
+    build: ./dash_app
+    container_name: nba_dash
+    env_file: .env
+    environment:
+      - DB_DSN=${DB_DSN}
+    ports:
+      - "8050:8050"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
