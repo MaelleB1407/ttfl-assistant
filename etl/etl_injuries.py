@@ -1,15 +1,20 @@
 import os
+import sys
 import time
-import re
 from datetime import datetime, timezone
 from io import StringIO
+from pathlib import Path
 
 import psycopg
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 
-DB_DSN = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from common.db import DB_DSN
 URL_ESPN = "https://www.espn.com/nba/injuries"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36",
@@ -97,21 +102,31 @@ def fetch_espn_injuries_df() -> pd.DataFrame:
     out["CHECK_DATE"] = datetime.now(tz=timezone.utc)
     return out
 
-def _map_team_name_to_id(cur, team_name: str) -> int | None:
-    """Essaie teams.espn_name puis teams.name/full_name (si tu as ces champs)."""
-    # 1) espn_name exact
-    cur.execute("SELECT id FROM teams WHERE espn_name = %s", (team_name,))
-    r = cur.fetchone()
-    if r: return r[0]
-    # 2) name exact (au cas où)
-    cur.execute("SELECT id FROM teams WHERE name = %s", (team_name,))
-    r = cur.fetchone()
-    if r: return r[0]
-    # 3) LIKE tolérant
+def _build_team_lookup(cur) -> dict[str, int]:
+    """Load all team names once to avoid N queries per player."""
+    cur.execute("SELECT id, name, espn_name, tricode FROM teams")
+    lookup: dict[str, int] = {}
+    for team_id, name, espn_name, tricode in cur.fetchall():
+        for key in {name, espn_name, tricode}:
+            if key:
+                lookup[_normalize_team_name(str(key)).lower()] = team_id
+    return lookup
+
+
+def _map_team_name_to_id(cur, team_name: str, lookup: dict[str, int], fallback_cache: dict[str, int | None]) -> int | None:
+    norm = _normalize_team_name(team_name).lower()
+    if norm in lookup:
+        return lookup[norm]
+    if norm in fallback_cache:
+        return fallback_cache[norm]
+
     cur.execute("SELECT id FROM teams WHERE espn_name ILIKE %s LIMIT 1", (f"%{team_name}%",))
-    r = cur.fetchone()
-    if r: return r[0]
-    return None
+    row = cur.fetchone()
+    team_id = row[0] if row else None
+    if team_id:
+        lookup[norm] = team_id
+    fallback_cache[norm] = team_id
+    return team_id
 
 def sync_injuries_once():
     df = fetch_espn_injuries_df()
@@ -126,10 +141,12 @@ def sync_injuries_once():
             # Charger état actuel en dict pour comparaison rapide
             cur.execute("SELECT team_id, player, status, est_return FROM injuries_current")
             current = {(t, p.lower()): (s, e) for t, p, s, e in cur.fetchall()}
+            team_lookup = _build_team_lookup(cur)
+            fallback_cache: dict[str, int | None] = {}
 
             for _, row in df.iterrows():
                 team_name = row["TEAM"]
-                team_id = _map_team_name_to_id(cur, team_name)
+                team_id = _map_team_name_to_id(cur, team_name, team_lookup, fallback_cache)
                 if not team_id:
                     # On ignore si équipe non mappée
                     continue
