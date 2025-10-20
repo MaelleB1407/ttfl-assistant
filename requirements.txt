@@ -1,0 +1,12 @@
+# === Dépendances communes ===
+pandas==2.2.2
+psycopg[binary]==3.2.1
+
+# === Dash (frontend web) ===
+dash==2.17.1
+
+# === ETL & API ===
+nba_api==1.5.0
+requests
+bs4
+lxml

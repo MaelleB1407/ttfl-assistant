@@ -1,4 +1,0 @@
-nba_api==1.5.0
-requests
-psycopg[binary]
-pandas

@@ -1,10 +1,10 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+COPY ../requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . .
 
-CMD ["python", "etl_teams_games.py"]
+ENV DB_DSN="postgresql://injuries:injuries@postgres:5432/injuries"

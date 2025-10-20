@@ -1,0 +1,73 @@
+name: Daily NBA Injury Report
+
+on:
+  schedule:
+    - cron: "* 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: injuries
+          POSTGRES_USER: injuries
+          POSTGRES_PASSWORD: injuries
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U injuries"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Wait for Postgres to be ready
+        run: |
+          echo "⏳ Waiting for Postgres..."
+          for i in {1..20}; do
+            pg_isready -h 127.0.0.1 -U injuries && break
+            echo "   Still waiting ($i/20)..."
+            sleep 3
+          done
+          echo "✅ Postgres connection OK."
+
+      - name: Initialize schema
+        run: |
+          echo "🧩 Initializing schema..."
+          PGPASSWORD=injuries psql -h 127.0.0.1 -U injuries -d injuries -f schema.sql
+
+      - name: Run ETL for teams and games
+        run: python etl/etl_teams_games.py
+        env:
+          DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+
+      - name: Run ETL for injuries
+        run: python etl/etl_injuries.py
+        env:
+          DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+
+      - name: Send NBA injuries report
+        run: python send_injuries_report.py
+        env:
+          DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+          SMTP_SERVER: smtp.gmail.com
+          SMTP_PORT: 587
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}

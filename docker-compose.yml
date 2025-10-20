@@ -1,54 +1,55 @@
+version: "3.9"
+
 services:
   postgres:
     image: postgres:16
     container_name: nba_pg
-    env_file: .env
+    environment:
+      POSTGRES_DB: injuries
+      POSTGRES_USER: injuries
+      POSTGRES_PASSWORD: injuries
     ports:
-      - "55432:5432"
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "injuries"]
+      interval: 5s
+      retries: 5
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  etl-init:
-    build: ./etl
-    container_name: nba_etl_init
-    env_file: .env
-    command: >
-      /bin/sh -c "
-      python etl_teams_games.py &&
-      python etl_players.py
-      "
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  etl-injuries:
-    build: ./etl
-    container_name: nba_etl_injuries
-    env_file: .env
-    command: python run_injuries_loop.py   # toutes les 2h
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
 
   dash:
-    build: ./dash_app
+    build:
+      context: .
+      dockerfile: dash_app/Dockerfile
     container_name: nba_dash
-    env_file: .env
-    environment:
-      - DB_DSN=${DB_DSN}
     ports:
       - "8050:8050"
     depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
+      - postgres
+    environment:
+      DB_DSN: postgresql://injuries:injuries@postgres:5432/injuries
+
+  etl-init:
+    build:
+      context: .
+      dockerfile: etl/Dockerfile
+    container_name: nba_etl_init
+    depends_on:
+      - postgres
+    environment:
+      DB_DSN: postgresql://injuries:injuries@postgres:5432/injuries
+    command: ["python", "etl_teams_games.py"]
+
+  etl-injuries:
+    build:
+      context: .
+      dockerfile: etl/Dockerfile
+    container_name: nba_etl_injuries
+    depends_on:
+      - postgres
+    env_file: .env
+    command: ["python", "etl_injuries.py"]
 
 volumes:
   pgdata:
