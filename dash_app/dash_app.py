@@ -1,23 +1,31 @@
 import os
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+import sys
+from pathlib import Path
 
 import pandas as pd
-import psycopg
 from dash import Dash, dcc, html, dash_table, Input, Output
 
-# --- Connexion DB ---
-DB_DSN = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
-PARIS = ZoneInfo("Europe/Paris")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
-def db_conn():
-    return psycopg.connect(DB_DSN)
+from common import PARIS, db_conn, load_injuries_for_window, paris_window, paris_today
 
-def paris_window(date_str: str, start_h: int = 18, end_h_next: int = 8):
-    base = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=PARIS)
-    start_paris = base.replace(hour=start_h, minute=0, second=0, microsecond=0)
-    end_paris = (base + timedelta(days=1)).replace(hour=end_h_next, minute=0, second=0, microsecond=0)
-    return start_paris.astimezone(ZoneInfo("UTC")), end_paris.astimezone(ZoneInfo("UTC"))
+# --- Styles ---
+TABLE_STYLE = {"height": "100%", "overflowY": "auto", "borderRadius": "8px"}
+CELL_STYLE = {
+    "padding": "8px",
+    "textAlign": "center",
+    "fontSize": 14,
+    "backgroundColor": "#ffffff",
+    "color": "#111",
+}
+HEADER_STYLE = {
+    "backgroundColor": "#d8e7f8",
+    "fontWeight": "bold",
+    "borderBottom": "2px solid #ccc",
+    "color": "#003366",
+}
 
 # --- Chargement des matchs ---
 def load_games(date_str: str) -> pd.DataFrame:
@@ -44,51 +52,11 @@ def load_games(date_str: str) -> pd.DataFrame:
         })
     return games
 
-# --- Chargement des blessures ---
-def load_injuries_for_window(date_str: str) -> pd.DataFrame:
-    start_utc, end_utc = paris_window(date_str)
-    q = """
-        WITH playing AS (
-          SELECT home_team_id AS team_id FROM games
-          WHERE tipoff_utc >= %s AND tipoff_utc < %s
-          UNION
-          SELECT away_team_id FROM games
-          WHERE tipoff_utc >= %s AND tipoff_utc < %s
-        )
-        SELECT
-          t.tricode AS team,
-          ic.player  AS player,
-          ic.status  AS status,
-          ic.est_return AS est_return
-        FROM injuries_current ic
-        JOIN playing p ON p.team_id = ic.team_id
-        JOIN teams t    ON t.id = ic.team_id
-        ORDER BY t.tricode, ic.status, ic.player;
-    """
-    with db_conn() as conn:
-        df = pd.read_sql(q, conn, params=[start_utc, end_utc, start_utc, end_utc])
-
-    if df.empty:
-        return pd.DataFrame(columns=["TEAM", "PLAYER", "STATUS", "EST_RETURN"])
-
-    df = df.rename(columns={
-        "team": "TEAM",
-        "player": "PLAYER",
-        "status": "STATUS",
-        "est_return": "EST_RETURN",
-    }).fillna("")
-
-    for col in ["TEAM", "PLAYER", "STATUS", "EST_RETURN"]:
-        df[col] = df[col].astype(str)
-
-    return df[["TEAM", "PLAYER", "STATUS", "EST_RETURN"]]
-
-
 # --- Dash UI ---
 app = Dash(__name__)
 app.title = "NBA Night View"
 
-today_str = datetime.now(PARIS).strftime("%Y-%m-%d")
+today_str = paris_today()
 
 app.layout = html.Div(
     style={
@@ -164,20 +132,9 @@ app.layout = html.Div(
                         ],
                         data=[],
                         page_size=15,
-                        style_table={"height": "100%", "overflowY": "auto", "borderRadius": "8px"},
-                        style_cell={
-                            "padding": "8px",
-                            "textAlign": "center",
-                            "fontSize": 14,
-                            "backgroundColor": "#ffffff",
-                            "color": "#111",
-                        },
-                        style_header={
-                            "backgroundColor": "#d8e7f8",
-                            "fontWeight": "bold",
-                            "borderBottom": "2px solid #ccc",
-                            "color": "#003366",
-                        },
+                        style_table=TABLE_STYLE,
+                        style_cell=CELL_STYLE,
+                        style_header=HEADER_STYLE,
                         style_data_conditional=[
                             {"if": {"row_index": "odd"}, "backgroundColor": "#f2f6fa"},
                         ],
@@ -195,25 +152,9 @@ app.layout = html.Div(
                         ],
                         data=[],
                         page_size=15,
-                        style_table={
-                            "height": "100%",
-                            "overflowY": "auto",
-                            "borderRadius": "10px",
-                        },
-                        style_cell={
-                            "padding": "8px",
-                            "textAlign": "center",
-                            "fontSize": 14,
-                            "backgroundColor": "#ffffff",
-                            "color": "#111",
-                            "border": "1px solid #e5e7eb",
-                        },
-                        style_header={
-                            "backgroundColor": "#d8e7f8",
-                            "fontWeight": "bold",
-                            "borderBottom": "2px solid #99bde5",
-                            "color": "#003366",
-                        },
+                        style_table=TABLE_STYLE | {"borderRadius": "10px"},
+                        style_cell=CELL_STYLE | {"border": "1px solid #e5e7eb"},
+                        style_header=HEADER_STYLE | {"borderBottom": "2px solid #99bde5"},
                         style_data_conditional=[
                             # ✅ Statut "Out" — rouge doux
                             {

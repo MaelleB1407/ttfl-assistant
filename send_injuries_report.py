@@ -2,61 +2,21 @@
 import os
 import smtplib
 import argparse
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import pandas as pd
-import psycopg
+
+from common import PARIS, load_injuries_for_window, paris_today
 
 # --- CONFIGURATION ---
-DB_DSN = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
-
 # 📧 Email settings
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER", "ton.email@gmail.com")
 SMTP_PASS = os.getenv("SMTP_PASS", "mot_de_passe_ou_app_password")
 EMAIL_TO   = os.getenv("EMAIL_TO", "destinataire@example.com")
-
-PARIS = ZoneInfo("Europe/Paris")
-
-# --- Connexion DB ---
-def db_conn():
-    return psycopg.connect(DB_DSN)
-
-# --- Fenêtre Paris 18h → 8h ---
-def paris_window(date_str: str):
-    base = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=PARIS)
-    start_paris = base.replace(hour=18, minute=0, second=0, microsecond=0)
-    end_paris = (base + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
-    return start_paris.astimezone(ZoneInfo("UTC")), end_paris.astimezone(ZoneInfo("UTC"))
-
-# --- Chargement des blessés ---
-def load_injuries_for_day(date_str: str) -> pd.DataFrame:
-    start_utc, end_utc = paris_window(date_str)
-    q = """
-        WITH playing AS (
-          SELECT home_team_id AS team_id FROM games
-          WHERE tipoff_utc >= %s AND tipoff_utc < %s
-          UNION
-          SELECT away_team_id FROM games
-          WHERE tipoff_utc >= %s AND tipoff_utc < %s
-        )
-        SELECT
-          t.tricode AS team,
-          ic.player AS player,
-          ic.status AS status,
-          ic.est_return AS est_return
-        FROM injuries_current ic
-        JOIN playing p ON p.team_id = ic.team_id
-        JOIN teams t   ON t.id = ic.team_id
-        ORDER BY t.tricode, ic.status, ic.player;
-    """
-    with db_conn() as conn:
-        df = pd.read_sql(q, conn, params=[start_utc, end_utc, start_utc, end_utc])
-    return df.fillna("")
 
 # --- Génération HTML joliment groupée par équipe ---
 def injuries_to_html(df: pd.DataFrame, date_str: str) -> str:
@@ -68,7 +28,7 @@ def injuries_to_html(df: pd.DataFrame, date_str: str) -> str:
         </div>
         """
 
-    grouped = df.groupby("team")
+    grouped = df.groupby("TEAM")
     nb_teams = len(grouped)
     nb_players = len(df)
 
@@ -77,15 +37,15 @@ def injuries_to_html(df: pd.DataFrame, date_str: str) -> str:
         rows = []
         for _, r in subdf.iterrows():
             bg = "#ffffff"
-            if "Out" in str(r["status"]):
+            if "Out" in str(r["STATUS"]):
                 bg = "#ffebeb"
-            elif "Day-To-Day" in str(r["status"]):
+            elif "Day-To-Day" in str(r["STATUS"]):
                 bg = "#fff8e1"
             rows.append(f"""
               <tr style="background-color:{bg};">
-                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['player']}</td>
-                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['status']}</td>
-                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['est_return']}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['PLAYER']}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['STATUS']}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['EST_RETURN']}</td>
               </tr>
             """)
 
@@ -114,7 +74,7 @@ def injuries_to_html(df: pd.DataFrame, date_str: str) -> str:
       </p>
       {''.join(html_sections)}
       <p style="font-size:12px;color:#7a7a7a;margin-top:20px;">
-        Dernière mise à jour : {datetime.now().strftime("%d/%m/%Y %H:%M")}
+        Dernière mise à jour : {datetime.now(PARIS).strftime("%d/%m/%Y %H:%M")}
       </p>
     </div>
     """
@@ -124,12 +84,12 @@ def injuries_to_text(df: pd.DataFrame, date_str: str) -> str:
     if df.empty:
         return f"Blessés — nuit du {date_str}\nAucun joueur blessé signalé."
     lines = [f"Blessés — nuit du {date_str}"]
-    grouped = df.groupby("team")
+    grouped = df.groupby("TEAM")
     lines.append(f"{len(grouped)} équipes — {len(df)} blessés\n")
     for team, subdf in grouped:
         lines.append(f"🏀 {team}")
         for _, r in subdf.iterrows():
-            lines.append(f"  - {r['player']} — {r['status']} (retour: {r['est_return']})")
+            lines.append(f"  - {r['PLAYER']} — {r['STATUS']} (retour: {r['EST_RETURN']})")
         lines.append("")
     return "\n".join(lines)
 
@@ -156,8 +116,8 @@ if __name__ == "__main__":
     parser.add_argument("--date", type=str, help="Date au format YYYY-MM-DD (par défaut : aujourd'hui)")
     args = parser.parse_args()
 
-    date_str = args.date or datetime.now(PARIS).strftime("%Y-%m-%d")
-    df = load_injuries_for_day(date_str)
+    date_str = args.date or paris_today()
+    df = load_injuries_for_window(date_str)
 
     html_body = injuries_to_html(df, date_str)
     text_body = injuries_to_text(df, date_str)
