@@ -1,15 +1,19 @@
-import os
+"""Dash application to visualise nightly NBA games and injuries."""
+from __future__ import annotations
+
+import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-from dash import Dash, dcc, html, dash_table, Input, Output
+from dash import Dash, Input, Output, dash_table, dcc, html
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from common import PARIS, db_conn, load_injuries_for_window, paris_window, paris_today
+from common import db_conn, load_injuries_for_window, paris_window, paris_today
 
 # --- Styles ---
 TABLE_STYLE = {"height": "100%", "overflowY": "auto", "borderRadius": "8px"}
@@ -28,7 +32,11 @@ HEADER_STYLE = {
 }
 
 # --- Chargement des matchs ---
+logger = logging.getLogger(__name__)
+
+
 def load_games(date_str: str) -> pd.DataFrame:
+    """Load the games scheduled in the Paris window for the given date."""
     start_utc, end_utc = paris_window(date_str)
     q = """
         SELECT
@@ -193,26 +201,31 @@ app.layout = html.Div(
     Input("date-pick", "date"),
     Input("team-filter", "value"),
 )
-def refresh(date_str, selected_team):
+def refresh(
+    date_str: str | None,
+    selected_team: str | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]]]:
+    """Update the two tables and the dropdown when the date/team filter changes."""
     if not date_str:
         return [], [], [{"label": "Toutes les équipes", "value": "ALL"}]
 
     games = load_games(date_str)
-    inj = load_injuries_for_window(date_str)
+    injuries = load_injuries_for_window(date_str)
 
     # Dropdown teams
     team_options = [{"label": "Toutes les équipes", "value": "ALL"}]
-    if not inj.empty:
-        team_options += [{"label": t, "value": t} for t in sorted(inj["TEAM"].unique())]
+    if not injuries.empty:
+        team_options += [{"label": t, "value": t} for t in sorted(injuries["TEAM"].unique())]
 
-    if selected_team != "ALL" and not inj.empty:
-        inj = inj[inj["TEAM"] == selected_team]
+    if selected_team != "ALL" and not injuries.empty:
+        injuries = injuries[injuries["TEAM"] == selected_team]
 
-    print(f"[dash refresh] {date_str} → games={len(games)}, injuries={len(inj)}", flush=True)
+    logger.info("Dash refresh for %s — games=%s injuries=%s", date_str, len(games), len(injuries))
 
-    return games.to_dict("records"), inj.to_dict("records"), team_options
+    return games.to_dict("records"), injuries.to_dict("records"), team_options
 
 
 if __name__ == "__main__":
-    print("✅ Dash app started", flush=True)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logger.info("Dash app starting")
     app.run_server(host="0.0.0.0", port=8050, debug=False)
