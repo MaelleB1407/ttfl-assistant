@@ -1,4 +1,5 @@
 """Dash application to visualise nightly NBA games and injuries."""
+
 from __future__ import annotations
 
 import logging
@@ -54,11 +55,17 @@ def load_games(date_str: str) -> pd.DataFrame:
         games = pd.read_sql(q, conn, params=[start_utc, end_utc])
     if not games.empty:
         games["tip_paris"] = pd.to_datetime(games["tip_paris"]).dt.strftime("%Y-%m-%d %H:%M")
-        games = games.rename(columns={
-            "game_id": "GAME_ID", "tip_paris": "TIP_PARIS",
-            "home": "HOME", "away": "AWAY", "arena_name": "ARENA"
-        })
+        games = games.rename(
+            columns={
+                "game_id": "GAME_ID",
+                "tip_paris": "TIP_PARIS",
+                "home": "HOME",
+                "away": "AWAY",
+                "arena_name": "ARENA",
+            }
+        )
     return games
+
 
 # --- Dash UI ---
 app = Dash(__name__)
@@ -86,7 +93,6 @@ app.layout = html.Div(
                 "fontWeight": "600",
             },
         ),
-
         html.Div(
             style={
                 "display": "flex",
@@ -119,7 +125,6 @@ app.layout = html.Div(
                 ),
             ],
         ),
-
         html.Div(
             style={
                 "display": "grid",
@@ -128,70 +133,88 @@ app.layout = html.Div(
                 "height": "75vh",
             },
             children=[
-                html.Div([
-                    html.H3("🏟️ Matchs à venir", style={"borderBottom": "3px solid #0066cc", "paddingBottom": "6px", "color": "#003366"}),
-                    dash_table.DataTable(
-                        id="tbl-games",
-                        columns=[
-                            {"name": "TIP_PARIS", "id": "TIP_PARIS"},
-                            {"name": "AWAY", "id": "AWAY"},
-                            {"name": "HOME", "id": "HOME"},
-                            {"name": "ARENA", "id": "ARENA"},
-                        ],
-                        data=[],
-                        page_size=15,
-                        style_table=TABLE_STYLE,
-                        style_cell=CELL_STYLE,
-                        style_header=HEADER_STYLE,
-                        style_data_conditional=[
-                            {"if": {"row_index": "odd"}, "backgroundColor": "#f2f6fa"},
-                        ],
-                    ),
-                ]),
-                html.Div([
-                    html.H3("🤕 Joueurs blessés", style={"borderBottom": "3px solid #0066cc", "paddingBottom": "6px", "color": "#003366"}),
-                    dash_table.DataTable(
-                        id="tbl-injuries",
-                        columns=[
-                            {"name": "TEAM", "id": "TEAM"},
-                            {"name": "PLAYER", "id": "PLAYER"},
-                            {"name": "STATUS", "id": "STATUS"},
-                            {"name": "EST_RETURN", "id": "EST_RETURN"},
-                        ],
-                        data=[],
-                        page_size=15,
-                        style_table=TABLE_STYLE | {"borderRadius": "10px"},
-                        style_cell=CELL_STYLE | {"border": "1px solid #e5e7eb"},
-                        style_header=HEADER_STYLE | {"borderBottom": "2px solid #99bde5"},
-                        style_data_conditional=[
-                            # ✅ Statut "Out" — rouge doux
-                            {
-                                "if": {"filter_query": "{STATUS} contains 'Out'"},
-                                "backgroundColor": "#ffe5e5",
-                                "color": "#8b0000",
-                                "fontWeight": "500",
+                html.Div(
+                    [
+                        html.H3(
+                            "🏟️ Matchs à venir",
+                            style={
+                                "borderBottom": "3px solid #0066cc",
+                                "paddingBottom": "6px",
+                                "color": "#003366",
                             },
-                            # ✅ Statut "Day-To-Day" — jaune pâle
-                            {
-                                "if": {"filter_query": "{STATUS} contains 'Day-To-Day'"},
-                                "backgroundColor": "#fff6d9",
-                                "color": "#705000",
-                                "fontWeight": "500",
+                        ),
+                        dash_table.DataTable(
+                            id="tbl-games",
+                            columns=[
+                                {"name": "TIP_PARIS", "id": "TIP_PARIS"},
+                                {"name": "AWAY", "id": "AWAY"},
+                                {"name": "HOME", "id": "HOME"},
+                                {"name": "ARENA", "id": "ARENA"},
+                            ],
+                            data=[],
+                            page_size=15,
+                            style_table=TABLE_STYLE,
+                            style_cell=CELL_STYLE,
+                            style_header=HEADER_STYLE,
+                            style_data_conditional=[
+                                {"if": {"row_index": "odd"}, "backgroundColor": "#f2f6fa"},
+                            ],
+                        ),
+                    ]
+                ),
+                html.Div(
+                    [
+                        html.H3(
+                            "🤕 Joueurs blessés",
+                            style={
+                                "borderBottom": "3px solid #0066cc",
+                                "paddingBottom": "6px",
+                                "color": "#003366",
                             },
-                            # ✅ Hover global (sans casser les couleurs)
-                            {
-                                "if": {"state": "active"},
-                                "backgroundColor": "#e8f0fc",
-                                "border": "1px solid #aac8f0",
-                            },
-                        ],
-                    )
-
-                ]),
+                        ),
+                        dash_table.DataTable(
+                            id="tbl-injuries",
+                            columns=[
+                                {"name": "TEAM", "id": "TEAM"},
+                                {"name": "PLAYER", "id": "PLAYER"},
+                                {"name": "STATUS", "id": "STATUS"},
+                                {"name": "EST_RETURN", "id": "EST_RETURN"},
+                            ],
+                            data=[],
+                            page_size=15,
+                            style_table=TABLE_STYLE | {"borderRadius": "10px"},
+                            style_cell=CELL_STYLE | {"border": "1px solid #e5e7eb"},
+                            style_header=HEADER_STYLE | {"borderBottom": "2px solid #99bde5"},
+                            style_data_conditional=[
+                                # ✅ Statut "Out" — rouge doux
+                                {
+                                    "if": {"filter_query": "{STATUS} contains 'Out'"},
+                                    "backgroundColor": "#ffe5e5",
+                                    "color": "#8b0000",
+                                    "fontWeight": "500",
+                                },
+                                # ✅ Statut "Day-To-Day" — jaune pâle
+                                {
+                                    "if": {"filter_query": "{STATUS} contains 'Day-To-Day'"},
+                                    "backgroundColor": "#fff6d9",
+                                    "color": "#705000",
+                                    "fontWeight": "500",
+                                },
+                                # ✅ Hover global (sans casser les couleurs)
+                                {
+                                    "if": {"state": "active"},
+                                    "backgroundColor": "#e8f0fc",
+                                    "border": "1px solid #aac8f0",
+                                },
+                            ],
+                        ),
+                    ]
+                ),
             ],
         ),
     ],
 )
+
 
 # --- Callbacks ---
 @app.callback(

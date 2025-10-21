@@ -10,3 +10,6 @@ nba_api==1.5.0
 requests
 bs4
 lxml
+
+# === Formatage ===
+black==24.8.0

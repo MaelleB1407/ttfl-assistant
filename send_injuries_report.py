@@ -138,8 +138,12 @@ def build_subject(date_str: str) -> str:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="Envoie le rapport des blessés NBA pour une date donnée.")
-    parser.add_argument("--date", type=str, help="Date au format YYYY-MM-DD (par défaut : aujourd'hui)")
+    parser = argparse.ArgumentParser(
+        description="Envoie le rapport des blessés NBA pour une date donnée."
+    )
+    parser.add_argument(
+        "--date", type=str, help="Date au format YYYY-MM-DD (par défaut : aujourd'hui)"
+    )
     return parser.parse_args(argv)
 
 

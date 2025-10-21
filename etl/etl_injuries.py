@@ -1,4 +1,5 @@
 """Synchronise ESPN injuries into the local database."""
+
 from __future__ import annotations
 
 import logging
@@ -100,8 +101,12 @@ def fetch_espn_injuries_df() -> pd.DataFrame:
                 continue
 
             est_return = str(series.iloc[idx_est]).strip() if pd.notna(series.iloc[idx_est]) else ""
-            status = str(series.iloc[idx_status]).strip() if pd.notna(series.iloc[idx_status]) else ""
-            comment = str(series.iloc[idx_comment]).strip() if pd.notna(series.iloc[idx_comment]) else ""
+            status = (
+                str(series.iloc[idx_status]).strip() if pd.notna(series.iloc[idx_status]) else ""
+            )
+            comment = (
+                str(series.iloc[idx_comment]).strip() if pd.notna(series.iloc[idx_comment]) else ""
+            )
             rows.append(
                 {
                     "TEAM": team,
@@ -114,7 +119,9 @@ def fetch_espn_injuries_df() -> pd.DataFrame:
 
     output = pd.DataFrame(rows)
     if output.empty:
-        return pd.DataFrame(columns=["TEAM", "PLAYER", "STATUS", "EST_RETURN", "COMMENT", "CHECK_DATE"])
+        return pd.DataFrame(
+            columns=["TEAM", "PLAYER", "STATUS", "EST_RETURN", "COMMENT", "CHECK_DATE"]
+        )
 
     output["CHECK_DATE"] = datetime.now(tz=timezone.utc)
     return output
@@ -165,7 +172,10 @@ def sync_injuries_once() -> None:
     with psycopg.connect(DB_DSN) as conn:
         with conn.cursor() as cursor:
             cursor.execute("SELECT team_id, player, status, est_return FROM injuries_current")
-            current = {(team_id, player.lower()): (status, est_return) for team_id, player, status, est_return in cursor.fetchall()}
+            current = {
+                (team_id, player.lower()): (status, est_return)
+                for team_id, player, status, est_return in cursor.fetchall()
+            }
             lookup = _build_team_lookup(cursor)
             fallback_cache: dict[str, int | None] = {}
 

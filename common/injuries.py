@@ -1,4 +1,5 @@
 """Helpers to load injuries for the Paris game window."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -38,12 +39,14 @@ def load_injuries_for_window(date_str: str) -> pd.DataFrame:
         return pd.DataFrame(columns=_INJURY_COLUMNS)
 
     df = (
-        df.rename(columns={
-            "team": "TEAM",
-            "player": "PLAYER",
-            "status": "STATUS",
-            "est_return": "EST_RETURN",
-        })
+        df.rename(
+            columns={
+                "team": "TEAM",
+                "player": "PLAYER",
+                "status": "STATUS",
+                "est_return": "EST_RETURN",
+            }
+        )
         .fillna("")
         .astype(str)
     )

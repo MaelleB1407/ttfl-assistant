@@ -1,4 +1,5 @@
 """Import NBA teams and schedule into the injuries database."""
+
 from __future__ import annotations
 
 import logging
@@ -117,7 +118,9 @@ def upsert_teams_and_games() -> None:
                         skipped_games += 1
                         continue
 
-                    tipoff_utc = datetime.fromisoformat(tipoff_str.replace("Z", "+00:00")).astimezone(timezone.utc)
+                    tipoff_utc = datetime.fromisoformat(
+                        tipoff_str.replace("Z", "+00:00")
+                    ).astimezone(timezone.utc)
                     season = infer_season_from_game(game)
 
                     cursor.execute(

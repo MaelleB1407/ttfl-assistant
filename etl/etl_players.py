@@ -1,4 +1,5 @@
 """Import NBA rosters into the local database using nba_api."""
+
 from __future__ import annotations
 
 import logging
@@ -37,7 +38,9 @@ def parse_birth_date(value: Any) -> str | None:
     return None
 
 
-def upsert_players_from_roster_df(cursor: Cursor[Any], team_db_id: int, dataframe: pd.DataFrame) -> None:
+def upsert_players_from_roster_df(
+    cursor: Cursor[Any], team_db_id: int, dataframe: pd.DataFrame
+) -> None:
     """Insert or update the players for a given roster dataframe."""
     for _, row in dataframe.iterrows():
         try:
