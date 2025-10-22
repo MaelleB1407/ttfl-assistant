@@ -13,3 +13,8 @@ lxml
 
 # === Formatage ===
 black==24.8.0
+
+# === Tests ===
+pytest==8.3.4
+pytest-cov==6.0.0
+pytest-mock==3.13.0
