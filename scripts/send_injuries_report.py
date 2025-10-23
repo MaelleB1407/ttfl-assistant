@@ -1,26 +1,32 @@
 #!/usr/bin/env python3
+"""Email the nightly injury report for teams playing in the Paris window."""
+from __future__ import annotations
+
+import argparse
+import logging
 import os
 import smtplib
-import argparse
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Iterable
 
 import pandas as pd
 
 from common import PARIS, load_injuries_for_window, paris_today
 
-# --- CONFIGURATION ---
-# 📧 Email settings
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER", "ton.email@gmail.com")
 SMTP_PASS = os.getenv("SMTP_PASS", "mot_de_passe_ou_app_password")
-EMAIL_TO   = os.getenv("EMAIL_TO", "destinataire@example.com")
+EMAIL_TO = os.getenv("EMAIL_TO", "destinataire@example.com")
 
-# --- Génération HTML joliment groupée par équipe ---
-def injuries_to_html(df: pd.DataFrame, date_str: str) -> str:
-    if df.empty:
+logger = logging.getLogger(__name__)
+
+
+def injuries_to_html(dataframe: pd.DataFrame, date_str: str) -> str:
+    """Render the injury dataframe into a styled HTML snippet."""
+    if dataframe.empty:
         return f"""
         <div style="font-family:Arial,sans-serif; background-color:#f9fbff; padding:20px; border-radius:8px;">
           <h2 style="color:#1a237e;">😷 Blessés — équipes jouant la nuit du {date_str}</h2>
@@ -28,99 +34,133 @@ def injuries_to_html(df: pd.DataFrame, date_str: str) -> str:
         </div>
         """
 
-    grouped = df.groupby("TEAM")
-    nb_teams = len(grouped)
-    nb_players = len(df)
+    grouped = dataframe.groupby("TEAM")
+    team_count = len(grouped)
+    player_count = len(dataframe)
 
-    html_sections = []
+    sections: list[str] = []
     for team, subdf in grouped:
         rows = []
-        for _, r in subdf.iterrows():
-            bg = "#ffffff"
-            if "Out" in str(r["STATUS"]):
-                bg = "#ffebeb"
-            elif "Day-To-Day" in str(r["STATUS"]):
-                bg = "#fff8e1"
-            rows.append(f"""
-              <tr style="background-color:{bg};">
-                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['PLAYER']}</td>
-                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['STATUS']}</td>
-                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{r['EST_RETURN']}</td>
-              </tr>
-            """)
+        for _, row in subdf.iterrows():
+            background = "#ffffff"
+            status_value = str(row["STATUS"])
+            if "Out" in status_value:
+                background = "#ffebeb"
+            elif "Day-To-Day" in status_value:
+                background = "#fff8e1"
+            rows.append(
+                f"""
+                <tr style="background-color:{background};">
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{row['PLAYER']}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{row['STATUS']}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">{row['EST_RETURN']}</td>
+                </tr>
+                """
+            )
 
-        section_html = f"""
-        <h3 style="color:#0d1b2a;margin-top:20px;">🏀 {team}</h3>
-        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;margin-bottom:10px;">
-          <thead>
-            <tr style="background:#1a237e;color:#fff;text-align:left;">
-              <th style="padding:10px 12px;">PLAYER</th>
-              <th style="padding:10px 12px;">STATUS</th>
-              <th style="padding:10px 12px;">EST RETURN</th>
-            </tr>
-          </thead>
-          <tbody>
-            {''.join(rows)}
-          </tbody>
-        </table>
-        """
-        html_sections.append(section_html)
+        sections.append(
+            f"""
+            <h3 style="color:#0d1b2a;margin-top:20px;">🏀 {team}</h3>
+            <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;margin-bottom:10px;">
+              <thead>
+                <tr style="background:#1a237e;color:#fff;text-align:left;">
+                  <th style="padding:10px 12px;">PLAYER</th>
+                  <th style="padding:10px 12px;">STATUS</th>
+                  <th style="padding:10px 12px;">EST RETURN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {''.join(rows)}
+              </tbody>
+            </table>
+            """
+        )
 
     return f"""
     <div style="font-family:Arial, sans-serif; background-color:#f3f6ff; padding:20px;">
       <h2 style="margin:0 0 8px;color:#0d1b2a;">😷 Blessés — équipes jouant la nuit du {date_str}</h2>
       <p style="color:#444;margin-bottom:20px;">
-        <strong>{nb_teams}</strong> équipes jouent — <strong>{nb_players}</strong> blessé(s) signalé(s)
+        <strong>{team_count}</strong> équipes jouent — <strong>{player_count}</strong> blessé(s) signalé(s)
       </p>
-      {''.join(html_sections)}
+      {''.join(sections)}
       <p style="font-size:12px;color:#7a7a7a;margin-top:20px;">
         Dernière mise à jour : {datetime.now(PARIS).strftime("%d/%m/%Y %H:%M")}
       </p>
     </div>
     """
 
-# --- Version texte brut ---
-def injuries_to_text(df: pd.DataFrame, date_str: str) -> str:
-    if df.empty:
+
+def injuries_to_text(dataframe: pd.DataFrame, date_str: str) -> str:
+    """Return a plain-text summary of the injuries for email clients."""
+    if dataframe.empty:
         return f"Blessés — nuit du {date_str}\nAucun joueur blessé signalé."
     lines = [f"Blessés — nuit du {date_str}"]
-    grouped = df.groupby("TEAM")
-    lines.append(f"{len(grouped)} équipes — {len(df)} blessés\n")
+    grouped = dataframe.groupby("TEAM")
+    lines.append(f"{len(grouped)} équipes — {len(dataframe)} blessés\n")
     for team, subdf in grouped:
         lines.append(f"🏀 {team}")
-        for _, r in subdf.iterrows():
-            lines.append(f"  - {r['PLAYER']} — {r['STATUS']} (retour: {r['EST_RETURN']})")
+        for _, row in subdf.iterrows():
+            lines.append(f"  - {row['PLAYER']} — {row['STATUS']} (retour: {row['EST_RETURN']})")
         lines.append("")
     return "\n".join(lines)
 
-# --- Envoi email ---
-def send_email(subject: str, html_body: str, text_body: str):
-    recipients = [a.strip() for a in EMAIL_TO.split(",") if a.strip()]
-    msg = MIMEMultipart("alternative")
-    msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(recipients)
-    msg["Subject"] = subject
-    msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+def _parse_recipients(value: str) -> list[str]:
+    """Split the EMAIL_TO environment variable into a clean list."""
+    return [address.strip() for address in value.split(",") if address.strip()]
+
+
+def send_email(subject: str, html_body: str, text_body: str, recipients: Iterable[str]) -> None:
+    """Send a multipart email containing both HTML and plain text versions."""
+    recipients_list = list(recipients)
+    if not recipients_list:
+        raise ValueError("No recipients provided for injuries report email")
+
+    message = MIMEMultipart("alternative")
+    message["From"] = SMTP_USER
+    message["To"] = ", ".join(recipients_list)
+    message["Subject"] = subject
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.starttls()
         server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_USER, recipients, msg.as_string())
+        server.sendmail(SMTP_USER, recipients_list, message.as_string())
 
-    print(f"✅ Email envoyé à {', '.join(recipients)}")
+    logger.info("Injury report sent to %s", ", ".join(recipients_list))
 
-# --- Main ---
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Envoie le rapport des blessés NBA pour une date donnée.")
-    parser.add_argument("--date", type=str, help="Date au format YYYY-MM-DD (par défaut : aujourd'hui)")
-    args = parser.parse_args()
 
+def build_subject(date_str: str) -> str:
+    """Return the default subject for the injury report email."""
+    return f"NBA — Blessés — {date_str}"
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(
+        description="Envoie le rapport des blessés NBA pour une date donnée."
+    )
+    parser.add_argument(
+        "--date", type=str, help="Date au format YYYY-MM-DD (par défaut : aujourd'hui)"
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Entry point for the CLI script."""
+    args = parse_args(argv)
     date_str = args.date or paris_today()
-    df = load_injuries_for_window(date_str)
+    dataframe = load_injuries_for_window(date_str)
 
-    html_body = injuries_to_html(df, date_str)
-    text_body = injuries_to_text(df, date_str)
-    subject = f"NBA — Blessés — {date_str}"
+    html_body = injuries_to_html(dataframe, date_str)
+    text_body = injuries_to_text(dataframe, date_str)
+    subject = build_subject(date_str)
 
-    send_email(subject, html_body, text_body)
+    recipients = _parse_recipients(EMAIL_TO)
+    send_email(subject, html_body, text_body, recipients)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    main()
