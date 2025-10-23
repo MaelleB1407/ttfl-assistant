@@ -121,6 +121,6 @@ if __name__ == "__main__":
 
     html_body = injuries_to_html(df, date_str)
     text_body = injuries_to_text(df, date_str)
-    subject = f"NBA — Blessés (fenêtre Paris 18h→8h) — {date_str}"
+    subject = f"NBA — Blessés — {date_str}"
 
     send_email(subject, html_body, text_body)

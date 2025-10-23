@@ -4,7 +4,7 @@ import requests
 import psycopg
 from datetime import datetime, timezone
 
-DB_DSN = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
+DB_DSN = os.getenv("DB_DSN", "postgresql://ttfl:ttfl@postgres:5432/ttfl_database")
 URL = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
 
 def safe_get_game_dates(data: dict):

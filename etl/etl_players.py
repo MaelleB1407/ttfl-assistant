@@ -8,7 +8,7 @@ from nba_api.stats.static import teams as static_teams
 from nba_api.stats.endpoints import commonteamroster
 from requests.exceptions import RequestException
 
-DB_DSN = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
+DB_DSN = os.getenv("DB_DSN", "postgresql://ttfl:ttfl@postgres:5432/ttfl_database")
 SEASON = os.getenv("NBA_SEASON_LABEL", "2025-26")  # format 'YYYY-YY'
 SLEEP_BETWEEN_CALLS = float(os.getenv("NBA_API_SLEEP", "0.6"))
 
