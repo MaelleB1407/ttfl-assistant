@@ -133,7 +133,7 @@ def send_email(subject: str, html_body: str, text_body: str, recipients: Iterabl
 
 def build_subject(date_str: str) -> str:
     """Return the default subject for the injury report email."""
-    return f"NBA — Blessés (fenêtre Paris 18h→8h) — {date_str}"
+    return f"NBA — Blessés — {date_str}"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

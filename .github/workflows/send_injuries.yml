@@ -13,13 +13,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: injuries
-          POSTGRES_USER: injuries
-          POSTGRES_PASSWORD: injuries
+          POSTGRES_DB: ttfl_database
+          POSTGRES_USER: ttfl
+          POSTGRES_PASSWORD: ttfl
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U injuries"
+          --health-cmd "pg_isready -U ttfl"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -41,7 +41,7 @@ jobs:
         run: |
           echo "⏳ Waiting for Postgres..."
           for i in {1..20}; do
-            pg_isready -h 127.0.0.1 -U injuries && break
+            pg_isready -h 127.0.0.1 -U ttfl && break
             echo "   Still waiting ($i/20)..."
             sleep 3
           done
@@ -50,22 +50,22 @@ jobs:
       - name: Initialize schema
         run: |
           echo "🧩 Initializing schema..."
-          PGPASSWORD=injuries psql -h 127.0.0.1 -U injuries -d injuries -f schema.sql
+          PGPASSWORD=ttfl psql -h 127.0.0.1 -U ttfl -d ttfl_database -f schema.sql
 
       - name: Run ETL for teams and games
         run: python etl/etl_teams_games.py
         env:
-          DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+          DB_DSN: postgresql://ttfl:ttfl@127.0.0.1:5432/ttfl_database
 
       - name: Run ETL for injuries
         run: python etl/etl_injuries.py
         env:
-          DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+          DB_DSN: postgresql://ttfl:ttfl@127.0.0.1:5432/ttfl_database
 
       - name: Send NBA injuries report
-        run: python send_injuries_report.py
+        run: python scripts/send_injuries_report.py
         env:
-          DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+          DB_DSN: postgresql://ttfl:ttfl@127.0.0.1:5432/ttfl_database
           SMTP_SERVER: smtp.gmail.com
           SMTP_PORT: 587
           SMTP_USER: ${{ secrets.SMTP_USER }}

@@ -8,9 +8,9 @@ from typing import Any
 import psycopg
 from psycopg import Connection
 
-DB_DSN: str = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
+DB_DSN = os.getenv("DB_DSN", "postgresql://ttfl:ttfl@postgres:5432/ttfl_database")
 
 
-def db_conn() -> Connection[Any]:
-    """Return a new connection to the injuries database."""
+def db_conn():
+    """Return a new connection to the ttfl database."""
     return psycopg.connect(DB_DSN)

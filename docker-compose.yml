@@ -5,13 +5,13 @@ services:
     image: postgres:16
     container_name: nba_pg
     environment:
-      POSTGRES_DB: injuries
-      POSTGRES_USER: injuries
-      POSTGRES_PASSWORD: injuries
+      POSTGRES_DB: ttfl_database
+      POSTGRES_USER: ttfl
+      POSTGRES_PASSWORD: ttfl
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "injuries"]
+      test: ["CMD", "pg_isready", "-U", "ttfl"]
       interval: 5s
       retries: 5
     volumes:
@@ -26,9 +26,10 @@ services:
     ports:
       - "8050:8050"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
-      DB_DSN: postgresql://injuries:injuries@postgres:5432/injuries
+      DB_DSN: postgresql://ttfl:ttfl@postgres:5432/ttfl_database
 
   etl-init:
     build:
@@ -36,10 +37,11 @@ services:
       dockerfile: etl/Dockerfile
     container_name: nba_etl_init
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
-      DB_DSN: postgresql://injuries:injuries@postgres:5432/injuries
-    command: ["python", "etl_teams_games.py"]
+      DB_DSN: postgresql://ttfl:ttfl@postgres:5432/ttfl_database
+    command: ["bash", "-lc", "python etl/etl_teams_games.py && python etl/etl_players.py"]
 
   etl-injuries:
     build:
@@ -47,9 +49,10 @@ services:
       dockerfile: etl/Dockerfile
     container_name: nba_etl_injuries
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file: .env
-    command: ["python", "etl_injuries.py"]
+    command: ["python", "etl/etl_injuries.py"]
 
 volumes:
   pgdata:

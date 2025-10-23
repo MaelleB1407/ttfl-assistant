@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY dash_app/dash_app.py .
 COPY common ./common
 
-ENV DB_DSN="postgresql://injuries:injuries@postgres:5432/injuries"
+ENV DB_DSN="postgresql://ttfl:ttfl@postgres:5432/ttfl_database"
 
 EXPOSE 8050
 CMD ["python", "dash_app.py"]

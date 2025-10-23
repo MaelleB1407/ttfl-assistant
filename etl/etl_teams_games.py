@@ -11,7 +11,7 @@ import psycopg
 import requests
 from psycopg import Connection, Cursor
 
-DB_DSN = os.getenv("DB_DSN", "postgresql://injuries:injuries@postgres:5432/injuries")
+DB_DSN = os.getenv("DB_DSN", "postgresql://ttfl:ttfl@postgres:5432/ttfl_database")
 URL = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
 
 logger = logging.getLogger(__name__)
