@@ -1,0 +1,63 @@
+name: Test Dashboard
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  dashboard-data:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: injuries
+          POSTGRES_USER: injuries
+          POSTGRES_PASSWORD: injuries
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U injuries"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
+
+    env:
+      DB_DSN: postgresql://injuries:injuries@127.0.0.1:5432/injuries
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Wait for Postgres to be ready
+        run: |
+          echo "⏳ Waiting for Postgres..."
+          for i in {1..20}; do
+            pg_isready -h 127.0.0.1 -U injuries && break
+            echo "   Still waiting ($i/20)..."
+            sleep 3
+          done
+          echo "✅ Postgres connection OK."
+
+      - name: Initialize schema
+        run: |
+          echo "🧩 Initializing schema..."
+          PGPASSWORD=injuries psql -h 127.0.0.1 -U injuries -d injuries -f schema.sql
+
+      - name: Run tests
+        run: python -m pytest -vv

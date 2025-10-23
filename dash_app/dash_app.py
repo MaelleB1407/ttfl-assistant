@@ -1,15 +1,20 @@
-import os
+"""Dash application to visualise nightly NBA games and injuries."""
+
+from __future__ import annotations
+
+import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-from dash import Dash, dcc, html, dash_table, Input, Output
+from dash import Dash, Input, Output, dash_table, dcc, html
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from common import PARIS, db_conn, load_injuries_for_window, paris_window, paris_today
+from common import db_conn, load_injuries_for_window, paris_window, paris_today
 
 # --- Styles ---
 TABLE_STYLE = {"height": "100%", "overflowY": "auto", "borderRadius": "8px"}
@@ -28,7 +33,11 @@ HEADER_STYLE = {
 }
 
 # --- Chargement des matchs ---
+logger = logging.getLogger(__name__)
+
+
 def load_games(date_str: str) -> pd.DataFrame:
+    """Load the games scheduled in the Paris window for the given date."""
     start_utc, end_utc = paris_window(date_str)
     q = """
         SELECT
@@ -46,11 +55,17 @@ def load_games(date_str: str) -> pd.DataFrame:
         games = pd.read_sql(q, conn, params=[start_utc, end_utc])
     if not games.empty:
         games["tip_paris"] = pd.to_datetime(games["tip_paris"]).dt.strftime("%Y-%m-%d %H:%M")
-        games = games.rename(columns={
-            "game_id": "GAME_ID", "tip_paris": "TIP_PARIS",
-            "home": "HOME", "away": "AWAY", "arena_name": "ARENA"
-        })
+        games = games.rename(
+            columns={
+                "game_id": "GAME_ID",
+                "tip_paris": "TIP_PARIS",
+                "home": "HOME",
+                "away": "AWAY",
+                "arena_name": "ARENA",
+            }
+        )
     return games
+
 
 # --- Dash UI ---
 app = Dash(__name__)
@@ -78,7 +93,6 @@ app.layout = html.Div(
                 "fontWeight": "600",
             },
         ),
-
         html.Div(
             style={
                 "display": "flex",
@@ -111,7 +125,6 @@ app.layout = html.Div(
                 ),
             ],
         ),
-
         html.Div(
             style={
                 "display": "grid",
@@ -120,70 +133,88 @@ app.layout = html.Div(
                 "height": "75vh",
             },
             children=[
-                html.Div([
-                    html.H3("🏟️ Matchs à venir", style={"borderBottom": "3px solid #0066cc", "paddingBottom": "6px", "color": "#003366"}),
-                    dash_table.DataTable(
-                        id="tbl-games",
-                        columns=[
-                            {"name": "TIP_PARIS", "id": "TIP_PARIS"},
-                            {"name": "AWAY", "id": "AWAY"},
-                            {"name": "HOME", "id": "HOME"},
-                            {"name": "ARENA", "id": "ARENA"},
-                        ],
-                        data=[],
-                        page_size=15,
-                        style_table=TABLE_STYLE,
-                        style_cell=CELL_STYLE,
-                        style_header=HEADER_STYLE,
-                        style_data_conditional=[
-                            {"if": {"row_index": "odd"}, "backgroundColor": "#f2f6fa"},
-                        ],
-                    ),
-                ]),
-                html.Div([
-                    html.H3("🤕 Joueurs blessés", style={"borderBottom": "3px solid #0066cc", "paddingBottom": "6px", "color": "#003366"}),
-                    dash_table.DataTable(
-                        id="tbl-injuries",
-                        columns=[
-                            {"name": "TEAM", "id": "TEAM"},
-                            {"name": "PLAYER", "id": "PLAYER"},
-                            {"name": "STATUS", "id": "STATUS"},
-                            {"name": "EST_RETURN", "id": "EST_RETURN"},
-                        ],
-                        data=[],
-                        page_size=15,
-                        style_table=TABLE_STYLE | {"borderRadius": "10px"},
-                        style_cell=CELL_STYLE | {"border": "1px solid #e5e7eb"},
-                        style_header=HEADER_STYLE | {"borderBottom": "2px solid #99bde5"},
-                        style_data_conditional=[
-                            # ✅ Statut "Out" — rouge doux
-                            {
-                                "if": {"filter_query": "{STATUS} contains 'Out'"},
-                                "backgroundColor": "#ffe5e5",
-                                "color": "#8b0000",
-                                "fontWeight": "500",
+                html.Div(
+                    [
+                        html.H3(
+                            "🏟️ Matchs à venir",
+                            style={
+                                "borderBottom": "3px solid #0066cc",
+                                "paddingBottom": "6px",
+                                "color": "#003366",
                             },
-                            # ✅ Statut "Day-To-Day" — jaune pâle
-                            {
-                                "if": {"filter_query": "{STATUS} contains 'Day-To-Day'"},
-                                "backgroundColor": "#fff6d9",
-                                "color": "#705000",
-                                "fontWeight": "500",
+                        ),
+                        dash_table.DataTable(
+                            id="tbl-games",
+                            columns=[
+                                {"name": "TIP_PARIS", "id": "TIP_PARIS"},
+                                {"name": "AWAY", "id": "AWAY"},
+                                {"name": "HOME", "id": "HOME"},
+                                {"name": "ARENA", "id": "ARENA"},
+                            ],
+                            data=[],
+                            page_size=15,
+                            style_table=TABLE_STYLE,
+                            style_cell=CELL_STYLE,
+                            style_header=HEADER_STYLE,
+                            style_data_conditional=[
+                                {"if": {"row_index": "odd"}, "backgroundColor": "#f2f6fa"},
+                            ],
+                        ),
+                    ]
+                ),
+                html.Div(
+                    [
+                        html.H3(
+                            "🤕 Joueurs blessés",
+                            style={
+                                "borderBottom": "3px solid #0066cc",
+                                "paddingBottom": "6px",
+                                "color": "#003366",
                             },
-                            # ✅ Hover global (sans casser les couleurs)
-                            {
-                                "if": {"state": "active"},
-                                "backgroundColor": "#e8f0fc",
-                                "border": "1px solid #aac8f0",
-                            },
-                        ],
-                    )
-
-                ]),
+                        ),
+                        dash_table.DataTable(
+                            id="tbl-injuries",
+                            columns=[
+                                {"name": "TEAM", "id": "TEAM"},
+                                {"name": "PLAYER", "id": "PLAYER"},
+                                {"name": "STATUS", "id": "STATUS"},
+                                {"name": "EST_RETURN", "id": "EST_RETURN"},
+                            ],
+                            data=[],
+                            page_size=15,
+                            style_table=TABLE_STYLE | {"borderRadius": "10px"},
+                            style_cell=CELL_STYLE | {"border": "1px solid #e5e7eb"},
+                            style_header=HEADER_STYLE | {"borderBottom": "2px solid #99bde5"},
+                            style_data_conditional=[
+                                # ✅ Statut "Out" — rouge doux
+                                {
+                                    "if": {"filter_query": "{STATUS} contains 'Out'"},
+                                    "backgroundColor": "#ffe5e5",
+                                    "color": "#8b0000",
+                                    "fontWeight": "500",
+                                },
+                                # ✅ Statut "Day-To-Day" — jaune pâle
+                                {
+                                    "if": {"filter_query": "{STATUS} contains 'Day-To-Day'"},
+                                    "backgroundColor": "#fff6d9",
+                                    "color": "#705000",
+                                    "fontWeight": "500",
+                                },
+                                # ✅ Hover global (sans casser les couleurs)
+                                {
+                                    "if": {"state": "active"},
+                                    "backgroundColor": "#e8f0fc",
+                                    "border": "1px solid #aac8f0",
+                                },
+                            ],
+                        ),
+                    ]
+                ),
             ],
         ),
     ],
 )
+
 
 # --- Callbacks ---
 @app.callback(
@@ -193,26 +224,31 @@ app.layout = html.Div(
     Input("date-pick", "date"),
     Input("team-filter", "value"),
 )
-def refresh(date_str, selected_team):
+def refresh(
+    date_str: str | None,
+    selected_team: str | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]]]:
+    """Update the two tables and the dropdown when the date/team filter changes."""
     if not date_str:
         return [], [], [{"label": "Toutes les équipes", "value": "ALL"}]
 
     games = load_games(date_str)
-    inj = load_injuries_for_window(date_str)
+    injuries = load_injuries_for_window(date_str)
 
     # Dropdown teams
     team_options = [{"label": "Toutes les équipes", "value": "ALL"}]
-    if not inj.empty:
-        team_options += [{"label": t, "value": t} for t in sorted(inj["TEAM"].unique())]
+    if not injuries.empty:
+        team_options += [{"label": t, "value": t} for t in sorted(injuries["TEAM"].unique())]
 
-    if selected_team != "ALL" and not inj.empty:
-        inj = inj[inj["TEAM"] == selected_team]
+    if selected_team != "ALL" and not injuries.empty:
+        injuries = injuries[injuries["TEAM"] == selected_team]
 
-    print(f"[dash refresh] {date_str} → games={len(games)}, injuries={len(inj)}", flush=True)
+    logger.info("Dash refresh for %s — games=%s injuries=%s", date_str, len(games), len(injuries))
 
-    return games.to_dict("records"), inj.to_dict("records"), team_options
+    return games.to_dict("records"), injuries.to_dict("records"), team_options
 
 
 if __name__ == "__main__":
-    print("✅ Dash app started", flush=True)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logger.info("Dash app starting")
     app.run_server(host="0.0.0.0", port=8050, debug=False)
