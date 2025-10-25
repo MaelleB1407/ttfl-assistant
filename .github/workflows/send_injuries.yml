@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "0 11 * * *"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - ".github/workflows/send_injuries.yml"
 
 jobs:
   send-report:
@@ -70,4 +76,4 @@ jobs:
           SMTP_PORT: 587
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_TO: ${{ github.event_name == 'schedule' && secrets.EMAIL_TO || secrets.EMAIL_TO_DEV }}

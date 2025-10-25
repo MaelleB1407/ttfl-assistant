@@ -6,12 +6,19 @@ import argparse
 import logging
 import os
 import smtplib
+import sys
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    # Ensure sibling packages like `common` are importable when running as a script
+    sys.path.append(str(PROJECT_ROOT))
 
 from common import PARIS, load_injuries_for_window, paris_today
 
